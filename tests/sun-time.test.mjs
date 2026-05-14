@@ -110,6 +110,21 @@ test("blends from sunset edge to ambient light during twilight", () => {
   assert.deepEqual(source.point, { x: 800, y: 325 });
 });
 
+test("keeps ambient light metadata during twilight transitions", () => {
+  const source = sunShadowSourceForTime(geo, sunTimeStateFromWorldTime(18 * 3600 + 30 * 60), {
+    ambientPoint: { x: 600, y: 400, radius: 180, distance: 40, elevation: 12, brightRadius: 80, dimRadius: 180 },
+    transitionSeconds: 3600
+  });
+
+  assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.TRANSITION);
+  assert.equal(source.elevation, 12);
+  assert.equal(source.radius, 180);
+  assert.equal(source.distance, 40);
+  assert.equal(source.brightRadius, 80);
+  assert.equal(source.dimRadius, 180);
+  assert.equal(source.ambientProgress, 0.5);
+});
+
 test("defaults twilight transitions to one configured hour", () => {
   const source = sunShadowSourceForTime(geo, sunTimeStateFromWorldTime(18 * 3600 + 30 * 60), {
     ambientPoint: { x: 600, y: 400 }

@@ -133,14 +133,14 @@ export function sunShadowSourceForTime(geo, state, { storedPoint = null, ambient
 
   if (seconds >= normalized.sunset) {
     const progress = _progress(seconds, normalized.sunset, Math.min(normalized.daySeconds - 1, normalized.sunset + transition));
-    if (progress < 1) return _source(SUN_SHADOW_SOURCE_TYPES.TRANSITION, _interpolatePoint(sunPoint, ambient, progress));
+    if (progress < 1) return _transitionSource(sunPoint, ambientPoint, progress, progress);
     return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambientPoint);
   }
 
   const dawnStart = Math.max(0, normalized.sunrise - transition);
   if (seconds >= dawnStart) {
     const progress = _progress(seconds, dawnStart, normalized.sunrise);
-    if (progress > 0) return _source(SUN_SHADOW_SOURCE_TYPES.TRANSITION, _interpolatePoint(ambient, sunPoint, progress));
+    if (progress > 0) return _transitionSource(ambientPoint, sunPoint, progress, 1 - progress);
   }
   return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambientPoint);
 }
@@ -234,8 +234,14 @@ function _source(type, value) {
   _copyFinite(source, value, "brightRadius");
   _copyFinite(source, value, "dimRadius");
   _copyFinite(source, value, "elevation");
+  _copyFinite(source, value, "ambientProgress");
   if (value?.id) source.id = String(value.id);
   return source;
+}
+
+function _transitionSource(start, end, progress, ambientProgress) {
+  const point = _interpolatePoint(start, end, progress);
+  return _source(SUN_SHADOW_SOURCE_TYPES.TRANSITION, { ...start, ...end, ...point, ambientProgress });
 }
 
 function _copyFinite(target, source, key) {

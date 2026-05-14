@@ -31,7 +31,7 @@ export function ambientLightSourceData(light, { darkness = null } = {}) {
     y: center.y,
     radius
   };
-  const elevation = _firstFinite(document.elevation, light.elevation, source.elevation, source.data?.elevation, config.elevation, document.z, light.z);
+  const elevation = _firstFinite(document.elevation, document._source?.elevation, light.elevation, source.elevation, source.data?.elevation, config.elevation, document.z, light.z);
   if (Number.isFinite(elevation)) result.elevation = elevation;
   if (radii.brightRadius > 0) result.brightRadius = radii.brightRadius;
   if (radii.dimRadius > 0) result.dimRadius = radii.dimRadius;

@@ -1,10 +1,16 @@
 export function ambientShadowInfluence(source, { visualElevation = 0, supportElevation = 0, localElevationDelta = null } = {}) {
   const radial = _radialInfluence(source);
   const vertical = _verticalInfluence(source, { visualElevation, supportElevation, localElevationDelta });
-  return {
+  const influence = {
     alphaMultiplier: radial.alphaMultiplier * vertical.alphaMultiplier,
     lengthMultiplier: radial.lengthMultiplier * vertical.lengthMultiplier,
     blurMultiplier: radial.blurMultiplier * vertical.blurMultiplier
+  };
+  const progress = _ambientProgress(source);
+  return progress >= 1 ? influence : {
+    alphaMultiplier: _lerp(1, influence.alphaMultiplier, progress),
+    lengthMultiplier: _lerp(1, influence.lengthMultiplier, progress),
+    blurMultiplier: _lerp(1, influence.blurMultiplier, progress)
   };
 }
 
@@ -58,6 +64,15 @@ function _verticalInfluence(source, { visualElevation, supportElevation, localEl
 
 function _clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function _ambientProgress(source) {
+  const progress = Number(source?.ambientProgress);
+  return Number.isFinite(progress) ? _clamp(progress, 0, 1) : 1;
+}
+
+function _lerp(start, end, progress) {
+  return start + (end - start) * progress;
 }
 
 function _finiteNumber(value, fallback) {

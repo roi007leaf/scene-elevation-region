@@ -26,3 +26,19 @@ test("dim radius softens and weakens ambient shadows beyond bright radius", () =
   assert.ok(dim.lengthMultiplier < bright.lengthMultiplier);
   assert.ok(dim.blurMultiplier > bright.blurMultiplier);
 });
+
+test("twilight transitions ramp in ambient elevation influence", () => {
+  const full = ambientShadowInfluence({ radius: 200, distance: 50, elevation: 25 }, {
+    supportElevation: 5,
+    visualElevation: 10,
+    localElevationDelta: 5
+  });
+  const halfway = ambientShadowInfluence({ radius: 200, distance: 50, elevation: 25, ambientProgress: 0.5 }, {
+    supportElevation: 5,
+    visualElevation: 10,
+    localElevationDelta: 5
+  });
+
+  assert.ok(halfway.lengthMultiplier < 1);
+  assert.ok(halfway.lengthMultiplier > full.lengthMultiplier);
+});

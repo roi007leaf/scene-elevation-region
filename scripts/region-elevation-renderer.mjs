@@ -4112,7 +4112,7 @@ function _sunShadowState(shadowMode, geo, bounds, { visualElevation = 0, support
     const sourcePoint = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT || source?.type === SUN_SHADOW_SOURCE_TYPES.TRANSITION
       ? source.point
       : _clampPointToSceneEdge(source?.point ?? storedPoint, geo);
-    const ambientInfluence = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT
+    const ambientInfluence = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT || source?.type === SUN_SHADOW_SOURCE_TYPES.TRANSITION
       ? ambientShadowInfluence(source, { visualElevation, supportElevation, localElevationDelta })
       : null;
     return {
@@ -4120,7 +4120,7 @@ function _sunShadowState(shadowMode, geo, bounds, { visualElevation = 0, support
       alphaMultiplier: SUN_EDGE_SHADOW_ALPHA_MULTIPLIER * (ambientInfluence?.alphaMultiplier ?? 1),
       lengthMultiplier: SUN_EDGE_SHADOW_LENGTH_MULTIPLIER * (ambientInfluence?.lengthMultiplier ?? 1),
       blurMultiplier: 1.08 * (ambientInfluence?.blurMultiplier ?? 1),
-      clipSource: ambientInfluence ? { x: source.point.x, y: source.point.y, radius: source.radius } : null
+      clipSource: source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT ? { x: source.point.x, y: source.point.y, radius: source.radius } : null
     };
   }
   return null;

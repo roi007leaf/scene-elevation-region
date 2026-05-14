@@ -49,3 +49,12 @@ test("extracts ambient light elevation and bright dim radii when available", () 
   assert.equal(source.dimRadius, 90);
   assert.equal(source.radius, 90);
 });
+
+test("extracts ambient light elevation from Foundry source data", () => {
+  const source = ambientLightSourceForPoint({ x: 100, y: 100 }, [
+    { document: { id: "lantern", x: 100, y: 100, _source: { elevation: 15 }, config: {} }, source: { shape: { radius: 90 } } }
+  ]);
+
+  assert.equal(source.id, "lantern");
+  assert.equal(source.elevation, 15);
+});
