@@ -1,12 +1,13 @@
-export function ambientLightSourceForPoint(point, lights, { darkness = null } = {}) {
+export function ambientLightSourceForPoint(point, lights, { darkness = null, coverageRadius = 0 } = {}) {
   const target = _point(point);
   if (!target) return null;
+  const targetRadius = Math.max(0, _finiteNumber(coverageRadius, 0));
   let best = null;
   for (const light of _asArray(lights)) {
     const source = ambientLightSourceData(light, { darkness });
     if (!source) continue;
     const distance = Math.hypot(target.x - source.x, target.y - source.y);
-    if (Number.isFinite(source.radius) && distance > source.radius) continue;
+    if (Number.isFinite(source.radius) && distance > source.radius + targetRadius) continue;
     if (!best || distance < best.distance) best = { ...source, distance };
   }
   return best;

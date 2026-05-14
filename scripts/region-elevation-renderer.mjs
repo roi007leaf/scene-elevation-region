@@ -1,5 +1,6 @@
 import { MODULE_ID, SCENE_SETTING_KEYS, PARALLAX_STRENGTHS, PARALLAX_LIFT_LIMITS, PARALLAX_DISTANCE_FACTORS, PARALLAX_MODES, PERSPECTIVE_POINTS, SHADOW_MODES, BLEND_MODES, OVERHEAD_MODES, OVERLAY_SCALE_STRENGTHS, DEPTH_SCALES, DEPTH_SCALE_REFERENCE, REGION_BEHAVIOR_TYPE, SHADOW_STRENGTH_LIMITS, SHADOW_LENGTHS, PARALLAX_HEIGHT_CONTRASTS, ELEVATED_GRID_MODES, elevationPresetValues, sceneGeometry, getSceneElevationSetting, getSceneElevationSettings, parallaxHeightContrastValue, shadowLengthValue, shadowLengthKey, elevationScaleValue, edgeStretchPercentValue } from "./config.mjs";
 import { debugWarn } from "./debug.mjs";
+import { clipPathsToCircle } from "./ambient-shadow-geometry.mjs";
 import { GeneratedTextureCache, validTexture as _validTexture } from "./generated-textures.mjs";
 import { sunTimeController } from "./sun-time-controller.mjs";
 import { SUN_SHADOW_SOURCE_TYPES } from "./sun-time.mjs";
@@ -2492,6 +2493,7 @@ export class RegionElevationRenderer {
       extrudedWalls: extrudedWallsActive,
       edgeStretch: edgeStretchActive,
       edgeOnlyShadow: blendMode === BLEND_MODES.WIDE || cliffWarpActive || extrudedWallsActive || edgeStretchActive,
+      shadowClipSource: sunShadow?.clipSource ?? null,
       cliffWarpAlpha,
       cliffWarpSourceWidth,
       edgeStretchAlpha,
@@ -3043,27 +3045,41 @@ export class RegionElevationRenderer {
 
   _createShadow(paths, texture, geo, params) {
     if (params.softShadowAlpha <= 0 && params.allAroundShadowAlpha <= 0 && params.bridgeShadowAlpha <= 0 && params.contactShadowAlpha <= 0 && params.textureSoftShadowAlpha <= 0 && params.textureBridgeShadowAlpha <= 0 && params.textureContactShadowAlpha <= 0) return null;
-    if (params.cliffWarp || params.extrudedWalls || params.edgeStretch) return this._createCliffWarpShadow(paths, params);
-    if (params.edgeOnlyShadow) return this._createEdgeTransitionShadow(paths, params);
+    const shadowPaths = this._shadowSourcePaths(paths, params);
+    if (!shadowPaths.length) return null;
+    if (params.cliffWarp || params.extrudedWalls || params.edgeStretch) return this._createCliffWarpShadow(shadowPaths, params);
+    if (params.edgeOnlyShadow) return this._createEdgeTransitionShadow(shadowPaths, params);
     const shadow = new PIXI.Container();
     shadow.eventMode = "none";
     if (params.textureMeldShadow && texture) {
-      const textureSoft = this._createTextureShadowLayer(paths, texture, geo, params.softShadowOffset, params.textureSoftShadowAlpha, params.softShadowBlur);
-      const textureBridge = this._createTextureShadowLayer(paths, texture, geo, params.bridgeShadowOffset, params.textureBridgeShadowAlpha, params.bridgeShadowBlur);
-      const textureContact = this._createTextureShadowLayer(paths, texture, geo, params.contactShadowOffset, params.textureContactShadowAlpha, params.contactShadowBlur);
+      const textureSoft = this._createTextureShadowLayer(shadowPaths, texture, geo, params.softShadowOffset, params.textureSoftShadowAlpha, params.softShadowBlur);
+      const textureBridge = this._createTextureShadowLayer(shadowPaths, texture, geo, params.bridgeShadowOffset, params.textureBridgeShadowAlpha, params.bridgeShadowBlur);
+      const textureContact = this._createTextureShadowLayer(shadowPaths, texture, geo, params.contactShadowOffset, params.textureContactShadowAlpha, params.contactShadowBlur);
       if (textureSoft) shadow.addChild(textureSoft);
       if (textureBridge) shadow.addChild(textureBridge);
       if (textureContact) shadow.addChild(textureContact);
     }
-    const allAround = this._createShadowLayer(paths, { x: 0, y: 0 }, params.allAroundShadowAlpha, params.allAroundShadowBlur);
-    const soft = this._createShadowLayer(paths, params.softShadowOffset, params.softShadowAlpha, params.softShadowBlur);
-    const bridge = this._createShadowLayer(paths, params.bridgeShadowOffset, params.bridgeShadowAlpha, params.bridgeShadowBlur);
-    const contact = this._createShadowLayer(paths, params.contactShadowOffset, params.contactShadowAlpha, params.contactShadowBlur);
+    const allAround = this._createShadowLayer(shadowPaths, { x: 0, y: 0 }, params.allAroundShadowAlpha, params.allAroundShadowBlur);
+    const soft = this._createShadowLayer(shadowPaths, params.softShadowOffset, params.softShadowAlpha, params.softShadowBlur);
+    const bridge = this._createShadowLayer(shadowPaths, params.bridgeShadowOffset, params.bridgeShadowAlpha, params.bridgeShadowBlur);
+    const contact = this._createShadowLayer(shadowPaths, params.contactShadowOffset, params.contactShadowAlpha, params.contactShadowBlur);
     if (allAround) shadow.addChild(allAround);
     if (soft) shadow.addChild(soft);
     if (bridge) shadow.addChild(bridge);
     if (contact) shadow.addChild(contact);
     return shadow.children.length ? shadow : null;
+  }
+
+  _shadowSourcePaths(paths, params) {
+    const source = params?.shadowClipSource;
+    if (!source) return paths;
+    try {
+      const clipped = clipPathsToCircle(paths, source, { segments: _ambientShadowClipSegments(source, params) });
+      return clipped.length ? clipped : [];
+    } catch (err) {
+      debugWarn("renderer.ambientShadowClip", err);
+      return paths;
+    }
   }
 
   _createCliffWarpShadow(paths, params) {
@@ -4091,18 +4107,42 @@ function _elevationScale() {
 function _sunShadowState(shadowMode, geo, bounds) {
   if (shadowMode === SHADOW_MODES.SUN_AT_EDGE) {
     const storedPoint = _setting(SCENE_SETTING_KEYS.SUN_EDGE_POINT);
-    const source = sunTimeController.resolvedShadowSource(canvas?.scene, geo, bounds.center, storedPoint);
+    const source = sunTimeController.resolvedShadowSource(canvas?.scene, geo, bounds, storedPoint);
     const sourcePoint = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT || source?.type === SUN_SHADOW_SOURCE_TYPES.TRANSITION
       ? source.point
       : _clampPointToSceneEdge(source?.point ?? storedPoint, geo);
+    const ambientInfluence = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT ? _ambientShadowInfluence(source) : null;
     return {
       direction: _directionAwayFromPoint(bounds.center, sourcePoint),
-      alphaMultiplier: SUN_EDGE_SHADOW_ALPHA_MULTIPLIER,
-      lengthMultiplier: SUN_EDGE_SHADOW_LENGTH_MULTIPLIER,
-      blurMultiplier: 1.08
+      alphaMultiplier: SUN_EDGE_SHADOW_ALPHA_MULTIPLIER * (ambientInfluence?.alphaMultiplier ?? 1),
+      lengthMultiplier: SUN_EDGE_SHADOW_LENGTH_MULTIPLIER * (ambientInfluence?.lengthMultiplier ?? 1),
+      blurMultiplier: 1.08 * (ambientInfluence?.blurMultiplier ?? 1),
+      clipSource: ambientInfluence ? { x: source.point.x, y: source.point.y, radius: source.radius } : null
     };
   }
   return null;
+}
+
+function _ambientShadowInfluence(source) {
+  const radius = Number(source?.radius);
+  const distance = Number(source?.distance);
+  if (!Number.isFinite(radius) || radius <= 0 || !Number.isFinite(distance)) {
+    return { alphaMultiplier: 1, lengthMultiplier: 1, blurMultiplier: 1 };
+  }
+  const edgeProgress = Math.clamp(distance / radius, 0, 1);
+  const centerStrength = 1 - edgeProgress;
+  return {
+    alphaMultiplier: 0.38 + centerStrength * 0.62,
+    lengthMultiplier: 0.48 + centerStrength * 0.72,
+    blurMultiplier: 1 + edgeProgress * 0.55
+  };
+}
+
+function _ambientShadowClipSegments(source, params) {
+  const radius = Number(source?.radius);
+  const gridSize = Math.max(1, Number(params?.gridSize ?? canvas?.grid?.size ?? 100));
+  if (!Number.isFinite(radius) || radius <= 0) return 24;
+  return Math.clamp(Math.ceil((Math.PI * 2 * radius) / Math.max(gridSize * 0.75, 16)), 16, 32);
 }
 
 function _directionAwayFromPoint(center, sourcePoint) {

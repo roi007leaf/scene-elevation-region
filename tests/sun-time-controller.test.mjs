@@ -111,3 +111,35 @@ test("coalesces ambient light refresh hooks into one frame refresh", () => {
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
   }
 });
+
+test("resolves ambient source for bounds overlapping a light even when the center is outside", () => {
+  game.time.worldTime = 20 * 3600;
+  const sceneSettings = {
+    [SCENE_SETTING_KEYS.PRESET]: ELEVATION_PRESETS.CUSTOM,
+    [SCENE_SETTING_KEYS.SHADOW_MODE]: SHADOW_MODES.SUN_AT_EDGE,
+    [SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE]: SUN_MOVEMENT_MODES.MINUTE
+  };
+  const scene = {
+    getFlag: (moduleId, flag) => moduleId === MODULE_ID && flag === SCENE_SETTINGS_FLAG ? sceneSettings : {}
+  };
+  canvas.scene = scene;
+  canvas.lighting.placeables = [
+    { document: { id: "edge", x: 180, y: 100, config: { darkness: { min: 0.6, max: 1 } } }, source: { shape: { radius: 40 } } }
+  ];
+
+  sunTimeController.clear(scene);
+  sunTimeController.refresh(null, { force: true });
+  const source = sunTimeController.resolvedShadowSource(scene, { x: 0, y: 0, width: 300, height: 200 }, {
+    minX: 50,
+    minY: 50,
+    maxX: 150,
+    maxY: 150,
+    width: 100,
+    height: 100,
+    center: { x: 100, y: 100 }
+  }, { x: 500, y: 0 });
+
+  assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT);
+  assert.equal(source.radius, 40);
+  assert.equal(source.distance, 80);
+});

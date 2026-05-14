@@ -129,12 +129,12 @@ export function sunShadowSourceForTime(geo, state, { storedPoint = null, ambient
   if (seconds >= normalized.sunrise && seconds < normalized.sunset) {
     return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, sunPoint);
   }
-  if (transition <= 0) return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambient);
+  if (transition <= 0) return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambientPoint);
 
   if (seconds >= normalized.sunset) {
     const progress = _progress(seconds, normalized.sunset, Math.min(normalized.daySeconds - 1, normalized.sunset + transition));
     if (progress < 1) return _source(SUN_SHADOW_SOURCE_TYPES.TRANSITION, _interpolatePoint(sunPoint, ambient, progress));
-    return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambient);
+    return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambientPoint);
   }
 
   const dawnStart = Math.max(0, normalized.sunrise - transition);
@@ -142,7 +142,7 @@ export function sunShadowSourceForTime(geo, state, { storedPoint = null, ambient
     const progress = _progress(seconds, dawnStart, normalized.sunrise);
     if (progress > 0) return _source(SUN_SHADOW_SOURCE_TYPES.TRANSITION, _interpolatePoint(ambient, sunPoint, progress));
   }
-  return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambient);
+  return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambientPoint);
 }
 
 function _calendarAnchors(date, daySeconds) {
@@ -225,8 +225,16 @@ function _transitionSeconds(state, transitionSeconds) {
   return Math.max(0, Math.floor(value));
 }
 
-function _source(type, point) {
-  return point ? { type, point } : null;
+function _source(type, value) {
+  const point = _point(value);
+  if (!point) return null;
+  const source = { type, point };
+  const radius = Number(value?.radius);
+  const distance = Number(value?.distance);
+  if (Number.isFinite(radius)) source.radius = radius;
+  if (Number.isFinite(distance)) source.distance = distance;
+  if (value?.id) source.id = String(value.id);
+  return source;
 }
 
 function _point(value) {

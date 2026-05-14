@@ -67,14 +67,15 @@ class SunTimeController {
     return point ?? storedPoint;
   }
 
-  resolvedShadowSource(scene, geo, targetPoint, storedPoint) {
+  resolvedShadowSource(scene, geo, target, storedPoint) {
     if (!scene || !geo || !this.isAutomatic(scene)) return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, storedPoint);
     const record = this._sceneStates.get(scene);
     if (!record?.state) return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, this.resolvedSunEdgePoint(scene, geo, storedPoint));
     const mode = this._mode(scene);
+    const ambientTarget = _shadowSourceTarget(target);
     return sunShadowSourceForTime(geo, record.state, {
       storedPoint,
-      ambientPoint: this._ambientLightPointForTarget(scene, targetPoint),
+      ambientPoint: this._ambientLightPointForTarget(scene, ambientTarget.point, ambientTarget.coverageRadius),
       transitionSeconds: mode === SUN_MOVEMENT_MODES.SUNRISE_NOON_SUNSET ? 0 : null
     }) ?? _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, this.resolvedSunEdgePoint(scene, geo, storedPoint));
   }
@@ -160,9 +161,10 @@ class SunTimeController {
     }
   }
 
-  _ambientLightPointForTarget(scene, targetPoint) {
+  _ambientLightPointForTarget(scene, targetPoint, coverageRadius = 0) {
     return ambientLightSourceForPoint(targetPoint, this._ambientLights(scene), {
-      darkness: this._sceneDarkness(scene)
+      darkness: this._sceneDarkness(scene),
+      coverageRadius
     });
   }
 
@@ -216,7 +218,27 @@ export const sunTimeController = new SunTimeController();
 function _source(type, point) {
   const x = Number(point?.x);
   const y = Number(point?.y);
-  return Number.isFinite(x) && Number.isFinite(y) ? { type, point: { x, y } } : null;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const source = { type, point: { x, y } };
+  const radius = Number(point?.radius);
+  const distance = Number(point?.distance);
+  if (Number.isFinite(radius)) source.radius = radius;
+  if (Number.isFinite(distance)) source.distance = distance;
+  return source;
+}
+
+function _shadowSourceTarget(value) {
+  const center = value?.center && typeof value.center === "object" ? value.center : value;
+  const point = { x: Number(center?.x), y: Number(center?.y) };
+  const width = Number(value?.width);
+  const height = Number(value?.height);
+  const coverageRadius = Number.isFinite(width) && Number.isFinite(height)
+    ? Math.hypot(Math.max(0, width), Math.max(0, height)) / 2
+    : 0;
+  return {
+    point,
+    coverageRadius
+  };
 }
 
 function _asArray(value) {

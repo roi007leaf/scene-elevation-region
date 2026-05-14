@@ -28,3 +28,12 @@ test("ignores hidden disabled out-of-range and darkness-inactive ambient lights"
 
   assert.equal(source.id, "night");
 });
+
+test("selects an ambient light that overlaps the target bounds even when the center is outside", () => {
+  const source = ambientLightSourceForPoint({ x: 100, y: 100 }, [
+    { document: { id: "edge", x: 180, y: 100, config: {} }, source: { shape: { radius: 40 } } }
+  ], { coverageRadius: 45 });
+
+  assert.equal(source.id, "edge");
+  assert.equal(source.distance, 80);
+});
