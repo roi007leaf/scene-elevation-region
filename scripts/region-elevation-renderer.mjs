@@ -2,6 +2,7 @@ import { MODULE_ID, SCENE_SETTING_KEYS, PARALLAX_STRENGTHS, PARALLAX_LIFT_LIMITS
 import { debugWarn } from "./debug.mjs";
 import { GeneratedTextureCache, validTexture as _validTexture } from "./generated-textures.mjs";
 import { sunTimeController } from "./sun-time-controller.mjs";
+import { SUN_SHADOW_SOURCE_TYPES } from "./sun-time.mjs";
 import {
   ELEVATED_GRID_COLOR,
   ELEVATED_GRID_SORT,
@@ -4090,10 +4091,12 @@ function _elevationScale() {
 function _sunShadowState(shadowMode, geo, bounds) {
   if (shadowMode === SHADOW_MODES.SUN_AT_EDGE) {
     const storedPoint = _setting(SCENE_SETTING_KEYS.SUN_EDGE_POINT);
-    const resolvedPoint = sunTimeController.resolvedSunEdgePoint(canvas?.scene, geo, storedPoint);
-    const sunPoint = _clampPointToSceneEdge(resolvedPoint, geo);
+    const source = sunTimeController.resolvedShadowSource(canvas?.scene, geo, bounds.center, storedPoint);
+    const sourcePoint = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT || source?.type === SUN_SHADOW_SOURCE_TYPES.TRANSITION
+      ? source.point
+      : _clampPointToSceneEdge(source?.point ?? storedPoint, geo);
     return {
-      direction: _directionAwayFromPoint(bounds.center, sunPoint),
+      direction: _directionAwayFromPoint(bounds.center, sourcePoint),
       alphaMultiplier: SUN_EDGE_SHADOW_ALPHA_MULTIPLIER,
       lengthMultiplier: SUN_EDGE_SHADOW_LENGTH_MULTIPLIER,
       blurMultiplier: 1.08

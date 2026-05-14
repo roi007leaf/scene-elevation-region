@@ -6,7 +6,9 @@ import {
   sunTimeStateFromCalendarDate,
   sunTimeStateFromWorldTime,
   sunTimeCadenceBucket,
-  sunEdgePointForTime
+  sunEdgePointForTime,
+  sunShadowSourceForTime,
+  SUN_SHADOW_SOURCE_TYPES
 } from "../scripts/sun-time.mjs";
 
 const geo = Object.freeze({ x: 0, y: 0, width: 1000, height: 500 });
@@ -87,4 +89,41 @@ test("maps sunlight progress to left top and right scene edges", () => {
   assert.deepEqual(sunEdgePointForTime(geo, sunTimeStateFromWorldTime(6 * 3600)), { x: 0, y: 250 });
   assert.deepEqual(sunEdgePointForTime(geo, sunTimeStateFromWorldTime(12 * 3600)), { x: 500, y: 0 });
   assert.deepEqual(sunEdgePointForTime(geo, sunTimeStateFromWorldTime(18 * 3600)), { x: 1000, y: 250 });
+});
+
+test("uses ambient light as the shadow source at night", () => {
+  const source = sunShadowSourceForTime(geo, sunTimeStateFromWorldTime(20 * 3600), {
+    ambientPoint: { x: 600, y: 400 }
+  });
+
+  assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT);
+  assert.deepEqual(source.point, { x: 600, y: 400 });
+});
+
+test("blends from sunset edge to ambient light during twilight", () => {
+  const source = sunShadowSourceForTime(geo, sunTimeStateFromWorldTime(18 * 3600 + 30 * 60), {
+    ambientPoint: { x: 600, y: 400 },
+    transitionSeconds: 3600
+  });
+
+  assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.TRANSITION);
+  assert.deepEqual(source.point, { x: 800, y: 325 });
+});
+
+test("defaults twilight transitions to one configured hour", () => {
+  const source = sunShadowSourceForTime(geo, sunTimeStateFromWorldTime(18 * 3600 + 30 * 60), {
+    ambientPoint: { x: 600, y: 400 }
+  });
+
+  assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.TRANSITION);
+  assert.deepEqual(source.point, { x: 800, y: 325 });
+});
+
+test("falls back to the sun edge source after sunset when no ambient light applies", () => {
+  const source = sunShadowSourceForTime(geo, sunTimeStateFromWorldTime(20 * 3600), {
+    storedPoint: { x: 111, y: 222 }
+  });
+
+  assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.SUN_EDGE);
+  assert.deepEqual(source.point, { x: 1000, y: 250 });
 });

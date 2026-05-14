@@ -4,9 +4,12 @@ import {
   setSceneElevationSettings,
   sunMovementModeValue
 } from "./config.mjs";
+import { ambientLightSourceForPoint } from "./ambient-light-source.mjs";
 import {
   SUN_MOVEMENT_MODES,
+  SUN_SHADOW_SOURCE_TYPES,
   sunEdgePointForTime,
+  sunShadowSourceForTime,
   sunTimeCadenceBucket,
   sunTimeStateFromCalendarDate,
   sunTimeStateFromWorldTime
@@ -26,6 +29,10 @@ class SunTimeController {
     this._registered = true;
     this._registerHook("updateWorldTime", () => this.refresh());
     this._registerHook("simple-calendar-date-time-change", data => this.refresh(data));
+    this._registerHook("updateScene", (scene, change) => this._refreshForSceneUpdate(scene, change));
+    for (const hook of ["createAmbientLight", "updateAmbientLight", "deleteAmbientLight", "drawAmbientLight", "refreshAmbientLight"]) {
+      this._registerHook(hook, light => this.refreshAmbientLight(light));
+    }
     const simpleCalendarHook = globalThis.SimpleCalendar?.Hooks?.DateTimeChange;
     if (simpleCalendarHook) this._registerHook(simpleCalendarHook, data => this.refresh(data));
   }
@@ -57,6 +64,27 @@ class SunTimeController {
     return point ?? storedPoint;
   }
 
+  resolvedShadowSource(scene, geo, targetPoint, storedPoint) {
+    if (!scene || !geo || !this.isAutomatic(scene)) return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, storedPoint);
+    const record = this._sceneStates.get(scene);
+    if (!record?.state) return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, this.resolvedSunEdgePoint(scene, geo, storedPoint));
+    const mode = this._mode(scene);
+    return sunShadowSourceForTime(geo, record.state, {
+      storedPoint,
+      ambientPoint: this._ambientLightPointForTarget(scene, targetPoint),
+      transitionSeconds: mode === SUN_MOVEMENT_MODES.SUNRISE_NOON_SUNSET ? 0 : null
+    }) ?? _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, this.resolvedSunEdgePoint(scene, geo, storedPoint));
+  }
+
+  refreshAmbientLight(light = null) {
+    const scene = canvas?.scene;
+    if (!scene || !this.isAutomatic(scene)) return;
+    const lightScene = light?.document?.parent ?? light?.parent ?? light?.scene ?? null;
+    if (lightScene && lightScene !== scene) return;
+    if (!this._sceneStates.has(scene)) this.refresh(null, { force: true });
+    else this._onRefresh?.(scene);
+  }
+
   isAutomatic(scene = canvas?.scene) {
     return this._mode(scene) !== SUN_MOVEMENT_MODES.MANUAL;
   }
@@ -75,6 +103,14 @@ class SunTimeController {
     if (!name || this._hookNames.has(name) || !globalThis.Hooks?.on) return;
     this._hookNames.add(name);
     Hooks.on(name, callback);
+  }
+
+  _refreshForSceneUpdate(scene, change) {
+    if (scene !== canvas?.scene || !this.isAutomatic(scene)) return;
+    if (!change || _hasAnyProperty(change, ["darkness", "environment.darkness", "environment.darknessLevel"])) {
+      if (!this._sceneStates.has(scene)) this.refresh(null, { force: true });
+      else this._onRefresh?.(scene);
+    }
   }
 
   _mode(scene = canvas?.scene) {
@@ -120,6 +156,79 @@ class SunTimeController {
       return null;
     }
   }
+
+  _ambientLightPointForTarget(scene, targetPoint) {
+    return ambientLightSourceForPoint(targetPoint, this._ambientLights(scene), {
+      darkness: this._sceneDarkness(scene)
+    });
+  }
+
+  _ambientLights(scene) {
+    if (scene !== canvas?.scene) return _uniqueObjects(scene?.lights ?? scene?.ambientLights);
+    return _uniqueObjects([
+      ..._asArray(canvas?.lighting?.placeables),
+      ..._asArray(canvas?.effects?.lighting?.placeables),
+      ..._asArray(canvas?.effects?.lightSources)
+    ]);
+  }
+
+  _sceneDarkness(scene) {
+    return _firstFinite(
+      canvas?.darknessLevel,
+      canvas?.environment?.darknessLevel,
+      canvas?.environment?.darkness,
+      scene?.darkness,
+      scene?.environment?.darknessLevel,
+      scene?.environment?.darkness
+    );
+  }
 }
 
 export const sunTimeController = new SunTimeController();
+
+function _source(type, point) {
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  return Number.isFinite(x) && Number.isFinite(y) ? { type, point: { x, y } } : null;
+}
+
+function _asArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value.values === "function") return Array.from(value.values());
+  if (typeof value[Symbol.iterator] === "function") return Array.from(value);
+  return [];
+}
+
+function _uniqueObjects(value) {
+  const seen = new Set();
+  const result = [];
+  for (const item of _asArray(value)) {
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+  return result;
+}
+
+function _firstFinite(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function _hasAnyProperty(object, paths) {
+  return paths.some(path => _hasProperty(object, path));
+}
+
+function _hasProperty(object, path) {
+  const parts = String(path).split(".");
+  let current = object;
+  for (const part of parts) {
+    if (!current || !Object.prototype.hasOwnProperty.call(current, part)) return false;
+    current = current[part];
+  }
+  return true;
+}

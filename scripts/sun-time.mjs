@@ -8,6 +8,12 @@ export const DEFAULT_TIME_CONFIGURATION = Object.freeze({
 
 export const DEFAULT_SUN_ANCHORS = Object.freeze(_defaultSunAnchors(DAY_SECONDS));
 
+export const SUN_SHADOW_SOURCE_TYPES = Object.freeze({
+  SUN_EDGE: "sunEdge",
+  AMBIENT_LIGHT: "ambientLight",
+  TRANSITION: "transition"
+});
+
 export const SUN_MOVEMENT_MODES = Object.freeze({
   MANUAL: "manual",
   MINUTE: "minute",
@@ -111,6 +117,34 @@ export function sunEdgePointForTime(geo, state) {
   );
 }
 
+export function sunShadowSourceForTime(geo, state, { storedPoint = null, ambientPoint = null, transitionSeconds = null } = {}) {
+  const normalized = _sunTimeState(state);
+  if (!normalized || !geo) return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, _point(storedPoint));
+  const sunPoint = sunEdgePointForTime(geo, normalized) ?? _point(storedPoint);
+  const ambient = _point(ambientPoint);
+  if (!ambient) return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, sunPoint);
+  const transition = _transitionSeconds(normalized, transitionSeconds);
+  const seconds = normalized.secondsOfDay;
+
+  if (seconds >= normalized.sunrise && seconds < normalized.sunset) {
+    return _source(SUN_SHADOW_SOURCE_TYPES.SUN_EDGE, sunPoint);
+  }
+  if (transition <= 0) return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambient);
+
+  if (seconds >= normalized.sunset) {
+    const progress = _progress(seconds, normalized.sunset, Math.min(normalized.daySeconds - 1, normalized.sunset + transition));
+    if (progress < 1) return _source(SUN_SHADOW_SOURCE_TYPES.TRANSITION, _interpolatePoint(sunPoint, ambient, progress));
+    return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambient);
+  }
+
+  const dawnStart = Math.max(0, normalized.sunrise - transition);
+  if (seconds >= dawnStart) {
+    const progress = _progress(seconds, dawnStart, normalized.sunrise);
+    if (progress > 0) return _source(SUN_SHADOW_SOURCE_TYPES.TRANSITION, _interpolatePoint(ambient, sunPoint, progress));
+  }
+  return _source(SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT, ambient);
+}
+
 function _calendarAnchors(date, daySeconds) {
   const values = [date.sunrise, date.midday, date.sunset].map(value => Number(value));
   if (!values.every(Number.isFinite)) return {};
@@ -183,6 +217,30 @@ function _progress(value, start, end) {
   const span = end - start;
   if (!Number.isFinite(span) || span <= 0) return 0;
   return _clamp((value - start) / span, 0, 1);
+}
+
+function _transitionSeconds(state, transitionSeconds) {
+  const fallback = state.minutesInHour * state.secondsInMinute;
+  const value = transitionSeconds == null ? fallback : _finiteNumber(transitionSeconds, fallback);
+  return Math.max(0, Math.floor(value));
+}
+
+function _source(type, point) {
+  return point ? { type, point } : null;
+}
+
+function _point(value) {
+  const x = Number(value?.x);
+  const y = Number(value?.y);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+function _interpolatePoint(start, end, progress) {
+  const t = _clamp(progress, 0, 1);
+  return {
+    x: start.x + (end.x - start.x) * t,
+    y: start.y + (end.y - start.y) * t
+  };
 }
 
 function _normalizedGeometry(geo) {
