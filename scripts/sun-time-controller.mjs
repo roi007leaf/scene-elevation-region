@@ -21,6 +21,8 @@ class SunTimeController {
     this._hookNames = new Set();
     this._sceneStates = new WeakMap();
     this._onRefresh = null;
+    this._visualRefreshFrame = null;
+    this._visualRefreshScene = null;
   }
 
   register({ onRefresh = null } = {}) {
@@ -55,6 +57,7 @@ class SunTimeController {
 
   clear(scene = canvas?.scene) {
     if (scene) this._sceneStates.delete(scene);
+    this._cancelQueuedVisualRefresh(scene);
   }
 
   resolvedSunEdgePoint(scene, geo, storedPoint) {
@@ -82,7 +85,7 @@ class SunTimeController {
     const lightScene = light?.document?.parent ?? light?.parent ?? light?.scene ?? null;
     if (lightScene && lightScene !== scene) return;
     if (!this._sceneStates.has(scene)) this.refresh(null, { force: true });
-    else this._onRefresh?.(scene);
+    else this._queueVisualRefresh(scene);
   }
 
   isAutomatic(scene = canvas?.scene) {
@@ -109,7 +112,7 @@ class SunTimeController {
     if (scene !== canvas?.scene || !this.isAutomatic(scene)) return;
     if (!change || _hasAnyProperty(change, ["darkness", "environment.darkness", "environment.darknessLevel"])) {
       if (!this._sceneStates.has(scene)) this.refresh(null, { force: true });
-      else this._onRefresh?.(scene);
+      else this._queueVisualRefresh(scene);
     }
   }
 
@@ -181,6 +184,30 @@ class SunTimeController {
       scene?.environment?.darknessLevel,
       scene?.environment?.darkness
     );
+  }
+
+  _queueVisualRefresh(scene) {
+    if (!scene) return;
+    this._visualRefreshScene = scene;
+    if (this._visualRefreshFrame) return;
+    const requestFrame = globalThis.requestAnimationFrame ?? (callback => setTimeout(callback, 16));
+    this._visualRefreshFrame = requestFrame(() => {
+      this._visualRefreshFrame = null;
+      const queuedScene = this._visualRefreshScene;
+      this._visualRefreshScene = null;
+      if (!queuedScene || queuedScene !== canvas?.scene || !this.isAutomatic(queuedScene)) return;
+      this._onRefresh?.(queuedScene);
+    });
+  }
+
+  _cancelQueuedVisualRefresh(scene = null) {
+    if (scene && scene !== this._visualRefreshScene) return;
+    if (this._visualRefreshFrame) {
+      const cancelFrame = globalThis.cancelAnimationFrame ?? clearTimeout;
+      cancelFrame(this._visualRefreshFrame);
+    }
+    this._visualRefreshFrame = null;
+    if (!scene || scene === this._visualRefreshScene) this._visualRefreshScene = null;
   }
 }
 

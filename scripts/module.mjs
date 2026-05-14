@@ -266,7 +266,7 @@ Hooks.on(`${MODULE_ID}.parallaxRefresh`, () => _tokenParallax.queueTokenParallax
 
 function _refreshSunTimeAutomationVisuals() {
   if (!_sceneElevationClientEnabled()) return;
-  RegionElevationRenderer.instance.update();
+  RegionElevationRenderer.instance.refreshVisuals({ emitVisualRefresh: false });
   canvas?.[ElevationAuthoringLayer.LAYER_NAME]?._drawPerspectiveHandle?.();
 }
 

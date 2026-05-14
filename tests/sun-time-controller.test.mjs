@@ -70,3 +70,44 @@ test("sunrise noon sunset cadence switches to ambient immediately at sunset", ()
   assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT);
   assert.deepEqual(source.point, { x: 120, y: 100 });
 });
+
+test("coalesces ambient light refresh hooks into one frame refresh", () => {
+  const queuedFrames = [];
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = callback => {
+    queuedFrames.push(callback);
+    return queuedFrames.length;
+  };
+  globalThis.cancelAnimationFrame = () => {};
+  try {
+    let refreshCount = 0;
+    sunTimeController.register({ onRefresh: () => { refreshCount += 1; } });
+    game.time.worldTime = 20 * 3600;
+    const sceneSettings = {
+      [SCENE_SETTING_KEYS.PRESET]: ELEVATION_PRESETS.CUSTOM,
+      [SCENE_SETTING_KEYS.SHADOW_MODE]: SHADOW_MODES.SUN_AT_EDGE,
+      [SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE]: SUN_MOVEMENT_MODES.MINUTE
+    };
+    const scene = {
+      getFlag: (moduleId, flag) => moduleId === MODULE_ID && flag === SCENE_SETTINGS_FLAG ? sceneSettings : {}
+    };
+    canvas.scene = scene;
+    sunTimeController.clear(scene);
+    sunTimeController.refresh(null, { force: true });
+    refreshCount = 0;
+
+    const light = { document: { parent: scene } };
+    sunTimeController.refreshAmbientLight(light);
+    sunTimeController.refreshAmbientLight(light);
+    sunTimeController.refreshAmbientLight(light);
+
+    assert.equal(refreshCount, 0);
+    assert.equal(queuedFrames.length, 1);
+    queuedFrames.shift()();
+    assert.equal(refreshCount, 1);
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+  }
+});
