@@ -5,6 +5,7 @@ import { ElevationRegionBehavior, registerRegionHooks } from "./region-behavior.
 import { enhanceRegionBehaviorConfigForm } from "./region-behavior-form.mjs";
 import { migrateSceneElevationSettings } from "./settings-migrations.mjs";
 import { registerModuleSettings } from "./settings-registration.mjs";
+import { sunTimeController } from "./sun-time-controller.mjs";
 import { debugLog, setDebugLogging } from "./debug.mjs";
 import { tokenElevationState, tokenScaleFactor } from "./token-elevation-state.mjs";
 import { createTokenElevationSyncController, TOKEN_MOVEMENT_DELTA_OPTION } from "./token-elevation-sync.mjs";
@@ -149,10 +150,14 @@ Hooks.once("init", () => {
     onClientEnabledChange: enabled => _refreshSceneElevationClientState(enabled),
     onElevatedGridChange: () => _elevatedGrid.queueRefresh(),
     onVisualSettingsChange: () => {
+      sunTimeController.refresh(null, { force: true });
       RegionElevationRenderer.instance.update();
       _refreshAllTokenScales();
     },
-    onRendererSettingsChange: () => RegionElevationRenderer.instance.update(),
+    onRendererSettingsChange: () => {
+      sunTimeController.refresh(null, { force: true });
+      RegionElevationRenderer.instance.update();
+    },
     onTokenScaleSettingsChange: () => _refreshAllTokenScales(),
     onTokenElevationSettingsChange: () => void _tokenElevationSync.refreshAllTokenElevations(),
     onDrawSteelMovementTypeAnimationsChange: () => {
@@ -207,6 +212,8 @@ Hooks.once("ready", async () => {
   _tokenHudRulerPatches.patchTokenHudPositioning();
   _tokenHudRulerPatches.patchTokenRulerParallaxGuide();
   await migrateSceneElevationSettings();
+  sunTimeController.register({ onRefresh: _refreshSunTimeAutomationVisuals });
+  sunTimeController.refresh(null, { force: true });
 });
 
 /* -------------------------------------------- */
@@ -220,6 +227,7 @@ Hooks.on("canvasReady", async () => {
     return;
   }
   RegionElevationRenderer.instance.attach(canvas.scene);
+  sunTimeController.refresh(null, { force: true });
   void _tokenElevationSync.refreshAllTokenElevations();
   _refreshAllTokenScales();
   // Defer a second pass to catch any post-ready Foundry canvas refresh that resets mesh scales
@@ -233,6 +241,7 @@ Hooks.on("canvasTearDown", () => {
   _clearPendingTokenVisualRefresh();
   _clearPendingRegionOverheadRefresh();
   _elevatedGrid.clearPendingRefresh();
+  sunTimeController.clear(canvas.scene);
   RegionElevationRenderer.instance.detach();
 });
 
@@ -255,6 +264,12 @@ Hooks.on("refreshTile", (tile) => {
 Hooks.on(`${MODULE_ID}.visualRefresh`, () => _queueTokenVisualRefresh());
 Hooks.on(`${MODULE_ID}.parallaxRefresh`, () => _tokenParallax.queueTokenParallaxRefresh());
 
+function _refreshSunTimeAutomationVisuals() {
+  if (!_sceneElevationClientEnabled()) return;
+  RegionElevationRenderer.instance.update();
+  canvas?.[ElevationAuthoringLayer.LAYER_NAME]?._drawPerspectiveHandle?.();
+}
+
 Hooks.on("renderSettingsConfig", (_app, html) => {
   requestAnimationFrame(() => _syncTokenScalingModeSettingsConfig(html));
 });
@@ -266,6 +281,7 @@ Hooks.on("updateScene", (scene, change) => {
   if (!geometryChanged && !sceneSettingsChanged) return;
   if (!_sceneElevationClientEnabled()) return;
   if (sceneSettingsChanged) invalidateSceneElevationSettingsCache(scene);
+  if (geometryChanged || sceneSettingsChanged) sunTimeController.refresh(null, { force: true });
   RegionElevationRenderer.instance.update();
   if (geometryChanged || sceneSettingsChanged) void _tokenElevationSync.refreshAllTokenElevations();
   _refreshAllTokenScales();

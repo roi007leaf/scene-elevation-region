@@ -5,6 +5,7 @@ import {
   PARALLAX_MODES,
   PERSPECTIVE_POINTS,
   SHADOW_MODES,
+  SUN_MOVEMENT_MODES,
   REGION_BEHAVIOR_TYPE,
   SHADOW_STRENGTH_LIMITS,
   sceneGeometry,
@@ -19,6 +20,7 @@ import { debugWarn } from "./debug.mjs";
 import { RegionElevationRenderer, getActiveElevationRegions, getRegionElevationStateAtPoint } from "./region-elevation-renderer.mjs";
 import { pathsBounds as _pathsBounds, pointInPolygon as _pointInPolygon, regionPaths as _regionPaths } from "./region-geometry.mjs";
 import { openSceneElevationSettingsDialog } from "./scene-settings.mjs";
+import { sunTimeController } from "./sun-time-controller.mjs";
 
 function _sceneElevationClientEnabled() {
   return getSceneElevationClientEnabled();
@@ -345,6 +347,7 @@ export class ElevationAuthoringLayer extends foundry.canvas.layers.InteractionLa
       const point = this._clampPointToSceneEdge(rawPoint);
       if (!this._sunEdgePointPreview || Math.hypot(point.x - this._sunEdgePointPreview.x, point.y - this._sunEdgePointPreview.y) >= EDGE_POINT_PREVIEW_MIN_DISTANCE) {
         this._sunEdgePointPreview = point;
+        setTransientSceneElevationSetting(canvas.scene, SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE, SUN_MOVEMENT_MODES.MANUAL);
         setTransientSceneElevationSetting(canvas.scene, SCENE_SETTING_KEYS.SUN_EDGE_POINT, this._sunEdgePointPreview);
         this._queueEdgePointPreviewRefresh();
       }
@@ -388,6 +391,7 @@ export class ElevationAuthoringLayer extends foundry.canvas.layers.InteractionLa
       this._consumeEvent(event);
       this._draggingSunPoint = true;
       this._sunEdgePointPreview = this._clampPointToSceneEdge(rawPoint);
+      setTransientSceneElevationSetting(canvas.scene, SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE, SUN_MOVEMENT_MODES.MANUAL);
       setTransientSceneElevationSetting(canvas.scene, SCENE_SETTING_KEYS.SUN_EDGE_POINT, this._sunEdgePointPreview);
       this._drawPerspectiveHandle();
       this._queueEdgePointPreviewRefresh();
@@ -470,7 +474,11 @@ export class ElevationAuthoringLayer extends foundry.canvas.layers.InteractionLa
       this._draggingSunPoint = false;
       clearTransientSceneElevationSettings(canvas.scene);
       const settings = getSceneElevationSettings(canvas.scene);
-      await setSceneElevationSettings(canvas.scene, { ...settings, [SCENE_SETTING_KEYS.SUN_EDGE_POINT]: point });
+      await setSceneElevationSettings(canvas.scene, {
+        ...settings,
+        [SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE]: SUN_MOVEMENT_MODES.MANUAL,
+        [SCENE_SETTING_KEYS.SUN_EDGE_POINT]: point
+      });
       this._drawPerspectiveHandle();
       RegionElevationRenderer.instance.update();
       return;
@@ -1204,7 +1212,9 @@ export class ElevationAuthoringLayer extends foundry.canvas.layers.InteractionLa
   }
 
   _sunEdgePoint() {
-    return this._clampPointToSceneEdge(getSceneElevationSetting(SCENE_SETTING_KEYS.SUN_EDGE_POINT));
+    const geo = sceneGeometry(canvas.scene);
+    const point = sunTimeController.resolvedSunEdgePoint(canvas.scene, geo, getSceneElevationSetting(SCENE_SETTING_KEYS.SUN_EDGE_POINT));
+    return this._clampPointToSceneEdge(point);
   }
 
   _clampPointToSceneEdge(point) {

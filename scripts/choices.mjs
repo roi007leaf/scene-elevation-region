@@ -9,6 +9,7 @@ import {
   PERSPECTIVE_POINTS,
   SCENE_SETTING_KEYS,
   SHADOW_MODES,
+  SUN_MOVEMENT_MODES,
   TOKEN_ELEVATION_MODES,
   TOKEN_SCALING_MODES
 } from "./config.mjs";
@@ -120,6 +121,13 @@ export const SCENE_SETTING_SELECT_GROUPS = Object.freeze({
     ["normal", "SCENE_ELEVATION.Settings.ShadowLengthNormal"],
     ["long", "SCENE_ELEVATION.Settings.ShadowLengthLong"],
     ["extreme", "SCENE_ELEVATION.Settings.ShadowLengthExtreme"]
+  ]),
+  [SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE]: Object.freeze([
+    [SUN_MOVEMENT_MODES.MANUAL, "SCENE_ELEVATION.Settings.SunMovementModeManual"],
+    [SUN_MOVEMENT_MODES.MINUTE, "SCENE_ELEVATION.Settings.SunMovementModeMinute"],
+    [SUN_MOVEMENT_MODES.TEN_MINUTES, "SCENE_ELEVATION.Settings.SunMovementModeTenMinutes"],
+    [SUN_MOVEMENT_MODES.HOUR, "SCENE_ELEVATION.Settings.SunMovementModeHour"],
+    [SUN_MOVEMENT_MODES.SUNRISE_NOON_SUNSET, "SCENE_ELEVATION.Settings.SunMovementModeSunriseNoonSunset"]
   ]),
   [SCENE_SETTING_KEYS.TOKEN_ELEVATION_MODE]: Object.freeze([
     [TOKEN_ELEVATION_MODES.ALWAYS, "SCENE_ELEVATION.Settings.TokenElevationModeAlways"],

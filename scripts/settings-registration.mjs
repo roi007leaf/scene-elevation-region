@@ -70,6 +70,7 @@ export function registerModuleSettings({
   _registerWorldChoice(SETTINGS.OVERLAY_SCALE, "SCENE_ELEVATION.Settings.OverlayScale", "SCENE_ELEVATION.Settings.OverlayScaleHint", WORLD_SETTING_CHOICES[SETTINGS.OVERLAY_SCALE], onVisualSettingsChange);
   _registerWorldChoice(SETTINGS.SHADOW_MODE, "SCENE_ELEVATION.Settings.ShadowMode", "SCENE_ELEVATION.Settings.ShadowModeHint", WORLD_SETTING_CHOICES[SETTINGS.SHADOW_MODE], onVisualSettingsChange);
   _registerWorldChoice(SETTINGS.SHADOW_LENGTH, "SCENE_ELEVATION.Settings.ShadowLength", "SCENE_ELEVATION.Settings.ShadowLengthHint", WORLD_SETTING_CHOICES[SETTINGS.SHADOW_LENGTH], onRendererSettingsChange);
+  _registerWorldChoice(SETTINGS.SUN_MOVEMENT_MODE, "SCENE_ELEVATION.Settings.SunMovementMode", "SCENE_ELEVATION.Settings.SunMovementModeHint", WORLD_SETTING_CHOICES[SETTINGS.SUN_MOVEMENT_MODE], onRendererSettingsChange);
   _registerWorldChoice(SETTINGS.DEPTH_SCALE, "SCENE_ELEVATION.Settings.DepthScale", "SCENE_ELEVATION.Settings.DepthScaleHint", WORLD_SETTING_CHOICES[SETTINGS.DEPTH_SCALE], onVisualSettingsChange);
   _registerWorldNumber(SETTINGS.ELEVATION_SCALE, "SCENE_ELEVATION.Settings.ElevationScale", "SCENE_ELEVATION.Settings.ElevationScaleHint", ELEVATION_SCALE_LIMITS, onVisualSettingsChange);
 

@@ -25,6 +25,7 @@ import {
   getSceneElevationSettings,
   parallaxHeightContrastKey,
   shadowLengthKey,
+  sunMovementModeValue,
   tokenScalePerElevationValue,
   tokenScalingModeValue,
   setSceneElevationSettings
@@ -64,6 +65,7 @@ class SceneElevationSettingsDialog extends foundry.applications.api.DialogV2 {
     form.addEventListener("change", event => {
       this._syncPresetFields(form, event.target);
       _syncEdgeStretchVisibility(form);
+      _syncSunMovementModeVisibility(form);
       _syncTokenScalingModeVisibility(form);
       void this._applyFormSettings();
     });
@@ -77,6 +79,7 @@ class SceneElevationSettingsDialog extends foundry.applications.api.DialogV2 {
       void this._setToDefault();
     });
     _syncEdgeStretchVisibility(form);
+    _syncSunMovementModeVisibility(form);
     _syncTokenScalingModeVisibility(form);
   }
 
@@ -123,6 +126,7 @@ function _settingsForm(settings) {
     ${_selectField(SCENE_SETTING_KEYS.OVERLAY_SCALE, "SCENE_ELEVATION.Settings.OverlayScale", settings)}
     ${_selectField(SCENE_SETTING_KEYS.SHADOW_MODE, "SCENE_ELEVATION.Settings.ShadowMode", settings)}
     ${_selectField(SCENE_SETTING_KEYS.SHADOW_LENGTH, "SCENE_ELEVATION.Settings.ShadowLength", settings)}
+    ${_sunMovementModeField(settings)}
     ${_selectField(SCENE_SETTING_KEYS.DEPTH_SCALE, "SCENE_ELEVATION.Settings.DepthScale", settings)}
     <div class="${MODULE_ID}-scene-settings-preset-end-divider" aria-hidden="true"></div>
     ${_rangeField(SCENE_SETTING_KEYS.ELEVATION_SCALE, "SCENE_ELEVATION.Settings.ElevationScale", "SCENE_ELEVATION.Settings.ElevationScaleHint", settings, ELEVATION_SCALE_LIMITS)}
@@ -213,6 +217,18 @@ function _edgeStretchRangeField(settings) {
   </div>`;
 }
 
+function _sunMovementModeField(settings) {
+  const name = SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE;
+  const current = sunMovementModeValue(settings[name]);
+  const hidden = settings[SCENE_SETTING_KEYS.SHADOW_MODE] !== SHADOW_MODES.SUN_AT_EDGE ? " hidden" : "";
+  const options = SCENE_SETTING_SELECT_GROUPS[name].map(([value, optionLabel]) => `<option value="${value}" ${value === current ? "selected" : ""}>${game.i18n.localize(optionLabel)}</option>`).join("");
+  return `<div class="form-group" data-sun-movement-mode style="margin-bottom: 4px;"${hidden}>
+    <label>${game.i18n.localize("SCENE_ELEVATION.Settings.SunMovementMode")}</label>
+    <select name="${name}">${options}</select>
+    <p class="hint">${game.i18n.localize("SCENE_ELEVATION.Settings.SunMovementModeHint")}</p>
+  </div>`;
+}
+
 function _populateSettingsForm(form, settings) {
   for (const [key, value] of Object.entries(settings)) {
     const field = form.elements.namedItem(key);
@@ -222,6 +238,7 @@ function _populateSettingsForm(form, settings) {
     if (field instanceof HTMLInputElement && field.type === "range") _syncRangeOutput(form, field);
   }
   _syncEdgeStretchVisibility(form);
+  _syncSunMovementModeVisibility(form);
   _syncTokenScalingModeVisibility(form);
 }
 
@@ -240,6 +257,7 @@ function _formSettings(data, current, scene) {
     [SCENE_SETTING_KEYS.OVERLAY_SCALE]: presetValues[SCENE_SETTING_KEYS.OVERLAY_SCALE] ?? _choice(data, SCENE_SETTING_KEYS.OVERLAY_SCALE, Object.keys(OVERLAY_SCALE_STRENGTHS), current, "subtle"),
     [SCENE_SETTING_KEYS.SHADOW_MODE]: presetValues[SCENE_SETTING_KEYS.SHADOW_MODE] ?? _choice(data, SCENE_SETTING_KEYS.SHADOW_MODE, Object.values(SHADOW_MODES), current, SHADOW_MODES.TOP_DOWN),
     [SCENE_SETTING_KEYS.SHADOW_LENGTH]: presetValues[SCENE_SETTING_KEYS.SHADOW_LENGTH] ?? _shadowLengthChoice(data, current),
+    [SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE]: sunMovementModeValue(data.get(SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE) ?? current[SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE]),
     [SCENE_SETTING_KEYS.SUN_EDGE_POINT]: current[SCENE_SETTING_KEYS.SUN_EDGE_POINT],
     [SCENE_SETTING_KEYS.TOKEN_ELEVATION_MODE]: _choice(data, SCENE_SETTING_KEYS.TOKEN_ELEVATION_MODE, Object.values(TOKEN_ELEVATION_MODES), current),
     [SCENE_SETTING_KEYS.TOKEN_ELEVATION_ANIMATION_MS]: Math.clamp(Number(data.get(SCENE_SETTING_KEYS.TOKEN_ELEVATION_ANIMATION_MS) ?? current[SCENE_SETTING_KEYS.TOKEN_ELEVATION_ANIMATION_MS] ?? 120), 0, 600),
@@ -265,6 +283,13 @@ function _syncEdgeStretchVisibility(form) {
   const blendField = form.elements.namedItem(SCENE_SETTING_KEYS.BLEND_MODE);
   if (!group || !blendField) return;
   group.hidden = blendField.value !== BLEND_MODES.EDGE_STRETCH;
+}
+
+function _syncSunMovementModeVisibility(form) {
+  const group = form.querySelector("[data-sun-movement-mode]");
+  const shadowModeField = form.elements.namedItem(SCENE_SETTING_KEYS.SHADOW_MODE);
+  if (!group || !shadowModeField) return;
+  group.hidden = shadowModeField.value !== SHADOW_MODES.SUN_AT_EDGE;
 }
 
 function _syncTokenScalingModeVisibility(form) {
@@ -311,6 +336,7 @@ function _applyPresetToSettingsForm(form, presetKey, scene) {
     if (edgeStretchField instanceof HTMLInputElement && edgeStretchField.type === "range") _syncRangeOutput(form, edgeStretchField);
   }
   _syncEdgeStretchVisibility(form);
+  _syncSunMovementModeVisibility(form);
   _syncTokenScalingModeVisibility(form);
 }
 
