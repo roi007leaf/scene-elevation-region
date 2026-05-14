@@ -229,12 +229,18 @@ function _source(type, value) {
   const point = _point(value);
   if (!point) return null;
   const source = { type, point };
-  const radius = Number(value?.radius);
-  const distance = Number(value?.distance);
-  if (Number.isFinite(radius)) source.radius = radius;
-  if (Number.isFinite(distance)) source.distance = distance;
+  _copyFinite(source, value, "radius");
+  _copyFinite(source, value, "distance");
+  _copyFinite(source, value, "brightRadius");
+  _copyFinite(source, value, "dimRadius");
+  _copyFinite(source, value, "elevation");
   if (value?.id) source.id = String(value.id);
   return source;
+}
+
+function _copyFinite(target, source, key) {
+  const value = Number(source?.[key]);
+  if (Number.isFinite(value)) target[key] = value;
 }
 
 function _point(value) {

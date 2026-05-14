@@ -17,4 +17,8 @@ test("sun-at-edge shadows resolve automatic ambient sources through the controll
     /clipPathsToCircle/.test(source),
     "renderer should clip ambient light shadows to the lit portion of the region"
   );
+  assert.ok(
+    /ambientShadowInfluence\(source,\s*\{ visualElevation, supportElevation, localElevationDelta \}\)/.test(source),
+    "renderer should include region and light elevation when scaling ambient shadows"
+  );
 });

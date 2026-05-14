@@ -37,3 +37,15 @@ test("selects an ambient light that overlaps the target bounds even when the cen
   assert.equal(source.id, "edge");
   assert.equal(source.distance, 80);
 });
+
+test("extracts ambient light elevation and bright dim radii when available", () => {
+  const source = ambientLightSourceForPoint({ x: 100, y: 100 }, [
+    { document: { id: "torch", x: 100, y: 100, elevation: 7, config: {} }, source: { brightRadius: 30, dimRadius: 90 } }
+  ]);
+
+  assert.equal(source.id, "torch");
+  assert.equal(source.elevation, 7);
+  assert.equal(source.brightRadius, 30);
+  assert.equal(source.dimRadius, 90);
+  assert.equal(source.radius, 90);
+});

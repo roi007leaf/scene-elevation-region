@@ -1,6 +1,7 @@
 import { MODULE_ID, SCENE_SETTING_KEYS, PARALLAX_STRENGTHS, PARALLAX_LIFT_LIMITS, PARALLAX_DISTANCE_FACTORS, PARALLAX_MODES, PERSPECTIVE_POINTS, SHADOW_MODES, BLEND_MODES, OVERHEAD_MODES, OVERLAY_SCALE_STRENGTHS, DEPTH_SCALES, DEPTH_SCALE_REFERENCE, REGION_BEHAVIOR_TYPE, SHADOW_STRENGTH_LIMITS, SHADOW_LENGTHS, PARALLAX_HEIGHT_CONTRASTS, ELEVATED_GRID_MODES, elevationPresetValues, sceneGeometry, getSceneElevationSetting, getSceneElevationSettings, parallaxHeightContrastValue, shadowLengthValue, shadowLengthKey, elevationScaleValue, edgeStretchPercentValue } from "./config.mjs";
 import { debugWarn } from "./debug.mjs";
 import { clipPathsToCircle } from "./ambient-shadow-geometry.mjs";
+import { ambientShadowInfluence } from "./ambient-shadow-physics.mjs";
 import { GeneratedTextureCache, validTexture as _validTexture } from "./generated-textures.mjs";
 import { sunTimeController } from "./sun-time-controller.mjs";
 import { SUN_SHADOW_SOURCE_TYPES } from "./sun-time.mjs";
@@ -2266,7 +2267,7 @@ export class RegionElevationRenderer {
     const baseParallaxDirection = parallax > 0
       ? (this._orthographicDirectionForMode(parallaxMode, geo) ?? this._perspectiveDirection(bounds, perspectivePoint))
       : STATIC_SHADOW_DIRECTION;
-    const sunShadow = _sunShadowState(shadowMode, geo, bounds);
+    const sunShadow = _sunShadowState(shadowMode, geo, bounds, { visualElevation, supportElevation, localElevationDelta });
     const shadowDirection = sunShadow?.direction ?? this._shadowDirection(bounds, parallax, shadowMode, perspectivePoint, parallaxMode, geo);
     const blendProfile = this._blendProfile(blendMode);
     const shadowDisabled = shadowMode === SHADOW_MODES.OFF;
@@ -4104,14 +4105,16 @@ function _elevationScale() {
   return elevationScaleValue(_setting(SCENE_SETTING_KEYS.ELEVATION_SCALE));
 }
 
-function _sunShadowState(shadowMode, geo, bounds) {
+function _sunShadowState(shadowMode, geo, bounds, { visualElevation = 0, supportElevation = 0, localElevationDelta = null } = {}) {
   if (shadowMode === SHADOW_MODES.SUN_AT_EDGE) {
     const storedPoint = _setting(SCENE_SETTING_KEYS.SUN_EDGE_POINT);
     const source = sunTimeController.resolvedShadowSource(canvas?.scene, geo, bounds, storedPoint);
     const sourcePoint = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT || source?.type === SUN_SHADOW_SOURCE_TYPES.TRANSITION
       ? source.point
       : _clampPointToSceneEdge(source?.point ?? storedPoint, geo);
-    const ambientInfluence = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT ? _ambientShadowInfluence(source) : null;
+    const ambientInfluence = source?.type === SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT
+      ? ambientShadowInfluence(source, { visualElevation, supportElevation, localElevationDelta })
+      : null;
     return {
       direction: _directionAwayFromPoint(bounds.center, sourcePoint),
       alphaMultiplier: SUN_EDGE_SHADOW_ALPHA_MULTIPLIER * (ambientInfluence?.alphaMultiplier ?? 1),
@@ -4121,21 +4124,6 @@ function _sunShadowState(shadowMode, geo, bounds) {
     };
   }
   return null;
-}
-
-function _ambientShadowInfluence(source) {
-  const radius = Number(source?.radius);
-  const distance = Number(source?.distance);
-  if (!Number.isFinite(radius) || radius <= 0 || !Number.isFinite(distance)) {
-    return { alphaMultiplier: 1, lengthMultiplier: 1, blurMultiplier: 1 };
-  }
-  const edgeProgress = Math.clamp(distance / radius, 0, 1);
-  const centerStrength = 1 - edgeProgress;
-  return {
-    alphaMultiplier: 0.38 + centerStrength * 0.62,
-    lengthMultiplier: 0.48 + centerStrength * 0.72,
-    blurMultiplier: 1 + edgeProgress * 0.55
-  };
 }
 
 function _ambientShadowClipSegments(source, params) {

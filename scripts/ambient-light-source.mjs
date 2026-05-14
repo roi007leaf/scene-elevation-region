@@ -22,14 +22,20 @@ export function ambientLightSourceData(light, { darkness = null } = {}) {
   if (!_withinDarknessRange(config, darkness)) return null;
   const center = _point(light.center) ?? _point(source) ?? _point(document) ?? _point(light);
   if (!center) return null;
-  const radius = _sourceRadius(light, source, config);
+  const radii = _sourceRadii(light, source, config);
+  const radius = radii.radius;
   if (radius !== Infinity && radius <= 0) return null;
-  return {
+  const result = {
     id: String(document.id ?? document._id ?? light.id ?? ""),
     x: center.x,
     y: center.y,
     radius
   };
+  const elevation = _firstFinite(document.elevation, light.elevation, source.elevation, source.data?.elevation, config.elevation, document.z, light.z);
+  if (Number.isFinite(elevation)) result.elevation = elevation;
+  if (radii.brightRadius > 0) result.brightRadius = radii.brightRadius;
+  if (radii.dimRadius > 0) result.dimRadius = radii.dimRadius;
+  return result;
 }
 
 function _asArray(value) {
@@ -60,18 +66,28 @@ function _withinDarknessRange(config, darkness) {
   return level >= min && level <= max;
 }
 
-function _sourceRadius(light, source, config) {
+function _sourceRadii(light, source, config) {
+  const brightRadius = _maxFinite(
+    source.brightRadius,
+    source.data?.brightRadius,
+    light.brightRadius
+  );
+  const dimRadius = _maxFinite(
+    source.dimRadius,
+    source.data?.dimRadius,
+    light.dimRadius
+  );
   const radius = _maxFinite(
     source.shape?.radius,
     source.radius,
     source.data?.radius,
     light.radius,
-    light.dimRadius,
-    light.brightRadius
+    dimRadius,
+    brightRadius
   );
-  if (radius > 0) return radius;
+  if (radius > 0) return { radius, brightRadius, dimRadius };
   const configured = _maxFinite(config.dim, config.bright, config.radius);
-  return configured > 0 ? Infinity : 0;
+  return { radius: configured > 0 ? Infinity : 0, brightRadius, dimRadius };
 }
 
 function _maxFinite(...values) {
@@ -81,6 +97,14 @@ function _maxFinite(...values) {
     if (Number.isFinite(number) && number > best) best = number;
   }
   return best;
+}
+
+function _firstFinite(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
 }
 
 function _finiteNumber(value, fallback) {

@@ -143,3 +143,26 @@ test("resolves ambient source for bounds overlapping a light even when the cente
   assert.equal(source.radius, 40);
   assert.equal(source.distance, 80);
 });
+
+test("preserves ambient light elevation through resolved shadow sources", () => {
+  game.time.worldTime = 20 * 3600;
+  const sceneSettings = {
+    [SCENE_SETTING_KEYS.PRESET]: ELEVATION_PRESETS.CUSTOM,
+    [SCENE_SETTING_KEYS.SHADOW_MODE]: SHADOW_MODES.SUN_AT_EDGE,
+    [SCENE_SETTING_KEYS.SUN_MOVEMENT_MODE]: SUN_MOVEMENT_MODES.MINUTE
+  };
+  const scene = {
+    getFlag: (moduleId, flag) => moduleId === MODULE_ID && flag === SCENE_SETTINGS_FLAG ? sceneSettings : {}
+  };
+  canvas.scene = scene;
+  canvas.lighting.placeables = [
+    { document: { id: "sconce", x: 100, y: 100, elevation: 12, config: { darkness: { min: 0.6, max: 1 } } }, source: { shape: { radius: 100 } } }
+  ];
+
+  sunTimeController.clear(scene);
+  sunTimeController.refresh(null, { force: true });
+  const source = sunTimeController.resolvedShadowSource(scene, { x: 0, y: 0, width: 300, height: 200 }, { x: 100, y: 100 }, { x: 500, y: 0 });
+
+  assert.equal(source.type, SUN_SHADOW_SOURCE_TYPES.AMBIENT_LIGHT);
+  assert.equal(source.elevation, 12);
+});

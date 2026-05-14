@@ -220,11 +220,18 @@ function _source(type, point) {
   const y = Number(point?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   const source = { type, point: { x, y } };
-  const radius = Number(point?.radius);
-  const distance = Number(point?.distance);
-  if (Number.isFinite(radius)) source.radius = radius;
-  if (Number.isFinite(distance)) source.distance = distance;
+  _copyFinite(source, point, "radius");
+  _copyFinite(source, point, "distance");
+  _copyFinite(source, point, "brightRadius");
+  _copyFinite(source, point, "dimRadius");
+  _copyFinite(source, point, "elevation");
+  if (point?.id) source.id = String(point.id);
   return source;
+}
+
+function _copyFinite(target, source, key) {
+  const value = Number(source?.[key]);
+  if (Number.isFinite(value)) target[key] = value;
 }
 
 function _shadowSourceTarget(value) {
